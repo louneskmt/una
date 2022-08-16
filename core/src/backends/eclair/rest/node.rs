@@ -15,8 +15,8 @@ pub struct EclairRest {
 
 impl EclairRest {
     pub fn new(config: EclairRestConfig) -> Result<Self, Error> {
-        let encoded_auth = format!("{}:{}", &config.username, &config.password);
-        let auhtorization = format!("Basic {}", base64::encode(encoded_auth));
+        let auth = format!("{}:{}", &config.username, &config.password);
+        let authorization = format!("Basic {}", base64::encode(encoded_auth));
 
         let mut headers = reqwest::header::HeaderMap::new();
         let auhtorization_value = reqwest::header::HeaderValue::from_str(&auhtorization)?;

@@ -1,4 +1,5 @@
-use crate::{error::ConfigError, types::NodeConfig};
+use crate::error::ConfigError;
+use crate::types::NodeConfig;
 
 #[derive(Clone, Debug)]
 pub struct EclairRestConfig {
@@ -9,6 +10,7 @@ pub struct EclairRestConfig {
 
 impl TryFrom<NodeConfig> for EclairRestConfig {
     type Error = ConfigError;
+    
     fn try_from(config: NodeConfig) -> Result<Self, Self::Error> {
         let url = config
             .url
