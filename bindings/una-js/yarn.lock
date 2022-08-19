@@ -17,6 +17,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@blc-org/una@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@blc-org/una@workspace:."
+  dependencies:
+    "@napi-rs/cli": ^2.11.4
+    ava: ^4.3.3
+    json-schema-to-typescript: ~11.0.2
+  languageName: unknown
+  linkType: soft
+
 "@gar/promisify@npm:^1.1.3":
   version: 1.1.3
   resolution: "@gar/promisify@npm:1.1.3"
@@ -2249,16 +2259,6 @@ __metadata:
   checksum: 0f42379a8adb67fe529add238a3e3d16699d95b42d01adfe7b9a7c5da297f5c1ba93de39265ba30ffeb37dfd0afb3fb66ae09f58d6515da442219c086219f6f4
   languageName: node
   linkType: hard
-
-"una@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "una@workspace:."
-  dependencies:
-    "@napi-rs/cli": ^2.11.4
-    ava: ^4.3.3
-    json-schema-to-typescript: ~11.0.2
-  languageName: unknown
-  linkType: soft
 
 "unique-filename@npm:^2.0.0":
   version: 2.0.1

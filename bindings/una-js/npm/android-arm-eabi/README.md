@@ -1,3 +1,3 @@
-# `una-android-arm-eabi`
+# `@blc-org/una-android-arm-eabi`
 
-This is the **armv7-linux-androideabi** binary for `una`
+This is the **armv7-linux-androideabi** binary for `@blc-org/una`

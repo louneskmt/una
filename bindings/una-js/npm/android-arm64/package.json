@@ -1,5 +1,5 @@
 {
-  "name": "una-android-arm64",
+  "name": "@blc-org/una-android-arm64",
   "version": "0.1.0",
   "os": [
     "android"
@@ -11,8 +11,14 @@
   "files": [
     "una.android-arm64.node"
   ],
+  "description": "Manage any Lightning node with UNA, the Universal Node API",
   "license": "MIT",
   "engines": {
     "node": ">= 10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blc-org/una",
+    "directory": "bindings/una-js"
   }
 }

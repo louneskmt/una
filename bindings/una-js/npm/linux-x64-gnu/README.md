@@ -1,3 +1,3 @@
-# `una-linux-x64-gnu`
+# `@blc-org/una-linux-x64-gnu`
 
-This is the **x86_64-unknown-linux-gnu** binary for `una`
+This is the **x86_64-unknown-linux-gnu** binary for `@blc-org/una`

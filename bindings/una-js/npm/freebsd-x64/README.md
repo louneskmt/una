@@ -1,3 +1,3 @@
-# `una-freebsd-x64`
+# `@blc-org/una-freebsd-x64`
 
-This is the **x86_64-unknown-freebsd** binary for `una`
+This is the **x86_64-unknown-freebsd** binary for `@blc-org/una`

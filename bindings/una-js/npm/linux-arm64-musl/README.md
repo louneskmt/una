@@ -1,3 +1,3 @@
-# `una-linux-arm64-musl`
+# `@blc-org/una-linux-arm64-musl`
 
-This is the **aarch64-unknown-linux-musl** binary for `una`
+This is the **aarch64-unknown-linux-musl** binary for `@blc-org/una`

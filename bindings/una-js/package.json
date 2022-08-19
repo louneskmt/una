@@ -1,5 +1,5 @@
 {
-  "name": "una",
+  "name": "@blc-org/una",
   "version": "0.1.0",
   "main": "index.js",
   "types": "index.d.ts",
@@ -40,5 +40,11 @@
   "packageManager": "yarn@3.2.2",
   "dependencies": {
     "ava": "^4.3.3"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blc-org/una",
+    "directory": "bindings/una-js"
+  },
+  "description": "Manage any Lightning node with UNA, the Universal Node API"
 }

@@ -1,3 +1,3 @@
-# `una-win32-x64-msvc`
+# `@blc-org/una-win32-x64-msvc`
 
-This is the **x86_64-pc-windows-msvc** binary for `una`
+This is the **x86_64-pc-windows-msvc** binary for `@blc-org/una`
