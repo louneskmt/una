@@ -1,0 +1,168 @@
+{
+  "nodejs": [
+    {
+      "host": "macos-latest",
+      "target": "x86_64-apple-darwin",
+      "test": true,
+      "build": {
+        "script": "yarn build && strip -x *.node"
+      }
+    },
+    {
+      "host": "macos-latest",
+      "target": "aarch64-apple-darwin",
+      "test": false,
+      "build": {
+        "script": "sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/* && export CC=$(xcrun -f clang) && export CXX=$(xcrun -f clang++) && SYSROOT=$(xcrun --sdk macosx --show-sdk-path) && export CFLAGS=\"-isysroot $SYSROOT -isystem $SYSROOT\" && yarn build --target aarch64-apple-darwin && strip -x *.node"
+      }
+    },
+    {
+      "host": "windows-latest",
+      "target": "x86_64-pc-windows-msvc",
+      "test": true,
+      "build": {
+        "script": "yarn build"
+      }
+    },
+    {
+      "host": "windows-latest",
+      "target": "i686-pc-windows-msvc",
+      "test": false,
+      "build": {
+        "setup": "yarn config set supportedArchitectures.cpu \"ia32\"",
+        "script": "yarn build --target i686-pc-windows-msvc"
+      }
+    },
+    {
+      "host": "ubuntu-latest",
+      "target": "x86_64-unknown-linux-gnu",
+      "test": {
+        "prefix-docker": "node:",
+        "suffix-docker": "-slim"
+      },
+      "build": {
+        "docker": "ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian",
+        "script": "set -e && yarn build --target x86_64-unknown-linux-gnu && strip *.node"
+      }
+    },
+    {
+      "host": "ubuntu-latest",
+      "target": "x86_64-unknown-linux-musl",
+      "test": {
+        "setup": "yarn config set supportedArchitectures.libc \"musl\"",
+        "prefix-docker": "node:",
+        "suffix-docker": "-alpine"
+      },
+      "build": {
+        "docker": "ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine",
+        "script": "set -e && apk update && apk add --no-cache perl perl-dev && yarn build && strip *.node"
+      }
+    },
+    {
+      "host": "ubuntu-latest",
+      "target": "aarch64-unknown-linux-gnu",
+      "test": {
+        "setup": "yarn config set supportedArchitectures.libc \"glibc\" && yarn config set supportedArchitectures.cpu \"arm64\"",
+        "prefix-docker": "ghcr.io/napi-rs/napi-rs/nodejs:aarch64-"
+      },
+      "build": {
+        "docker": "ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64",
+        "script": "set -e && sudo apt-get update && sudo apt-get install -y perl gcc-aarch64-linux-gnu g++-aarch64-linux-gnu && yarn build --target aarch64-unknown-linux-gnu && aarch64-unknown-linux-gnu-strip *.node"
+      }
+    },
+    {
+      "host": "ubuntu-latest",
+      "target": "aarch64-unknown-linux-musl",
+      "test": {
+        "setup": "yarn config set supportedArchitectures.libc \"musl\" && yarn config set supportedArchitectures.cpu \"arm64\"",
+        "custom-docker": "docker run --rm -v $(pwd):/build -w /build multiarch/alpine:aarch64-latest-stable sh -c \"apk add nodejs npm yarn && yarn test\""
+      },
+      "build": {
+        "docker": "ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine",
+        "script": "set -e && apk update && apk add --no-cache perl perl-dev && rustup target add aarch64-unknown-linux-musl && yarn build --target aarch64-unknown-linux-musl && /aarch64-linux-musl-cross/bin/aarch64-linux-musl-strip *.node"
+      }
+    },
+    {
+      "host": "ubuntu-latest",
+      "target": "armv7-unknown-linux-gnueabihf",
+      "test": {
+        "setup": "yarn config set supportedArchitectures.cpu \"arm\"",
+        "prefix-docker": "ghcr.io/napi-rs/napi-rs/nodejs:armhf-"
+      },
+      "build": {
+        "setup": "sudo apt-get update && sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf -y",
+        "script": "yarn build --target=armv7-unknown-linux-gnueabihf && arm-linux-gnueabihf-strip *.node"
+      }
+    },
+    {
+      "host": "ubuntu-latest",
+      "target": "aarch64-linux-android",
+      "test": false,
+      "build": {
+        "script": "export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang\" && export CC=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang\" && export CXX=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++\" && export AR=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar\" && export PATH=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}\" && yarn build --target aarch64-linux-android && ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip *.node"
+      }
+    },
+    {
+      "host": "ubuntu-latest",
+      "target": "armv7-linux-androideabi",
+      "test": false,
+      "build": {
+        "script": "export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang\" && export CC=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang\" && export CXX=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang++\" && export AR=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar\" && export PATH=\"${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}\" && yarn build --target armv7-linux-androideabi && ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip *.node"
+      }
+    }
+  ],
+  "python": [
+    {
+      "name": "macos",
+      "target": "x86_64",
+      "host": "macos-latest"
+    },
+    {
+      "name": "windows",
+      "target": "x64",
+      "host": "windows-latest"
+    },
+    {
+      "name": "windows",
+      "target": "x86",
+      "host": "windows-latest"
+    },
+    {
+      "name": "linux",
+      "target": "x86_64",
+      "host": "ubuntu-latest"
+    },
+    {
+      "name": "linux",
+      "target": "i686",
+      "host": "ubuntu-latest"
+    },
+    {
+      "name": "linux",
+      "target": "aarch64",
+      "host": "ubuntu-latest"
+    },
+    {
+      "name": "linux",
+      "target": "armv7",
+      "host": "ubuntu-latest"
+    },
+    {
+      "name": "musllinux",
+      "target": "x86_64-unknown-linux-musl",
+      "host": "ubuntu-latest"
+    },
+    {
+      "name": "musllinux",
+      "target": "aarch64-unknown-linux-musl",
+      "arch": "aarch64",
+      "host": "ubuntu-latest"
+    },
+    {
+      "name": "musllinux",
+      "target": "armv7-unknown-linux-musleabihf",
+      "arch": "armv7",
+      "host": "ubuntu-latest"
+    }
+  ]
+}

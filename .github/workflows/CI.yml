@@ -1,0 +1,586 @@
+name: CI
+
+env:
+  DEBUG: napi:*
+  APP_NAME: una
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+  BINDINGS_JS_PATH: "bindings/una-js"
+  BINDINGS_PYTHON_PATH: "bindings/una-python"
+
+on:
+  push:
+    branches:
+      - prepare-release-v0.1.0 # change to main before merge
+    tags-ignore:
+      - "**"
+    paths-ignore:
+      - "**/*.md"
+      - LICENSE
+      - "**/*.gitignore"
+      - .editorconfig
+      - "**/docs/**"
+  pull_request: null
+
+jobs:
+  ################
+  ##   Common   ##
+  ################
+  prepare-matrix:
+    name: Prepare build matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Export NodeJS matrix
+        id: nodejs
+        run: |
+          matrix=$(cat .github/matrix.json | jq .nodejs)
+
+          # the following lines are required for multi line json
+          matrix="${matrix//'%'/'%25'}"
+          matrix="${matrix//$'\n'/'%0A'}"
+          matrix="${matrix//$'\r'/'%0D'}"
+
+          echo "::set-output name=matrix::$matrix"
+      - name: Export Python matrix
+        id: python
+        run: |
+          matrix=$(cat .github/matrix.json | jq .python)
+
+          # the following lines are required for multi line json
+          matrix="${matrix//'%'/'%25'}"
+          matrix="${matrix//$'\n'/'%0A'}"
+          matrix="${matrix//$'\r'/'%0D'}"
+
+          echo "::set-output name=matrix::$matrix"
+      - name: Display NodeJS JSON matrix
+        run: echo '${{ steps.nodejs.outputs.matrix }}'
+      - name: Display Python JSON matrix
+        run: echo '${{ steps.python.outputs.matrix }}'
+    outputs:
+      nodejs: ${{ steps.nodejs.outputs.matrix }}
+      python: ${{ steps.python.outputs.matrix }}
+
+  build-proto:
+    name: Build protobuf files
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ">=1.11.0"
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ${{ github.workspace }}/.cargo-cache
+            ${{ github.workspace }}/target/
+          key: protobufs
+      - name: Install Bazel
+        run: |
+          go install github.com/bazelbuild/bazelisk@latest
+      - name: Download Protoc
+        run: |
+          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.5/protobuf-cpp-3.21.5.tar.gz
+          tar -xf protobuf-cpp-3.21.5.tar.gz
+      - name: Cache Bazel
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/bazel
+          key: protoc-${{ hashFiles('protobuf-cpp-3.21.5.tar.gz') }}
+      - name: Install Protoc
+        run: |
+          cd protobuf-3.21.5
+          bazel build :protoc :protobuf
+          cp bazel-bin/protoc /usr/local/bin
+      - name: Build protobufs
+        run: cargo run --package una-proto-builder
+      - name: Upload protobufs
+        uses: actions/upload-artifact@v3
+        with:
+          name: protobufs
+          path: ${{ github.workspace }}/proto/out
+          if-no-files-found: error
+
+  ################
+  ##   PYTHON   ##
+  ################
+  build-python:
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.prepare-matrix.outputs.python) }}
+    name: python@${{ matrix.name }}-${{ matrix.target }}
+    runs-on: ${{ matrix.host }}
+    needs:
+      - prepare-matrix
+      - build-proto
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Download protobufs from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: protobufs
+          path: ${{ github.workspace }}/proto/out
+      - name: Setup Python x64
+        if: ${{ matrix.target != 'x86' }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          architecture: x64
+      - name: Setup Python x86
+        uses: actions/setup-python@v4
+        if: ${{ matrix.target == 'x86' }}
+        with:
+          python-version: "3.10"
+          architecture: x86
+      - name: Install Rust toolchain
+        if: ${{ matrix.name == 'macos' || matrix.name == 'windows' }}
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ${{ github.workspace }}/.cargo-cache
+            ${{ github.workspace }}/target/
+          key: ${{ matrix.target }}-cargo-${{ matrix.host }}
+      - name: Build wheels for non-Linux platforms
+        uses: messense/maturin-action@v1
+        if: ${{ matrix.name != 'linux' && matrix.name != 'musllinux' }}
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out ${{ env.BINDINGS_PYTHON_PATH }}/dist --sdist -m ${{ env.BINDINGS_PYTHON_PATH }}/Cargo.toml
+      - name: Build wheels for Linux platforms
+        uses: messense/maturin-action@v1
+        if: ${{ matrix.name == 'linux' }}
+        with:
+          manylinux: auto
+          target: ${{ matrix.target }}
+          args: --release --out ${{ env.BINDINGS_PYTHON_PATH }}/dist --sdist -m ${{ env.BINDINGS_PYTHON_PATH }}/Cargo.toml
+      - name: Build wheels for Musl Linux platforms
+        uses: messense/maturin-action@v1
+        if: ${{ matrix.name == 'musllinux' }}
+        with:
+          manylinux: musllinux_1_2
+          target: ${{ matrix.target }}
+          args: --release --out ${{ env.BINDINGS_PYTHON_PATH }}/dist --sdist -m ${{ env.BINDINGS_PYTHON_PATH }}/Cargo.toml
+      - name: Build wheels with universal2 (macOS)
+        if: ${{ matrix.name == 'macos' }}
+        uses: messense/maturin-action@v1
+        with:
+          args: --release --out ${{ env.BINDINGS_PYTHON_PATH }}/dist --sdist -m ${{ env.BINDINGS_PYTHON_PATH }}/Cargo.toml --universal2
+      - name: Install built wheel
+        if: ${{ matrix.name == 'windows'|| matrix.name == 'macos' || matrix.target == 'x86_64' }}
+        run: |
+          pip install una --no-index --find-links ${{ env.BINDINGS_PYTHON_PATH }}/dist --force-reinstall
+          python -c "import una"
+      - name: Install built wheel (Ubuntu arch system)
+        uses: uraimo/run-on-arch-action@v2
+        if: ${{ matrix.target == 'aarch64' || matrix.target == 'armv7' }}
+        with:
+          arch: ${{ matrix.target }}
+          distro: ubuntu20.04
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update
+            apt-get install -y --no-install-recommends python3 python3-pip
+            pip3 install -U pip
+          run: |
+            pip3 install una --no-index --find-links ${{ env.BINDINGS_PYTHON_PATH }}/dist --force-reinstall
+            python3 -c "import una"
+      - name: Install built wheel (Docker container)
+        if: ${{ matrix.target == 'x86_64-unknown-linux-musl'}}
+        uses: addnab/docker-run-action@v3
+        with:
+          image: alpine:latest
+          options: -v ${{ github.workspace }}/${{ env.BINDINGS_PYTHON_PATH }}:/io -w /io
+          run: |
+            apk add py3-pip
+            pip3 install -U pip
+            pip3 install una --no-index --find-links /io/dist/ --force-reinstall
+            python3 -c "import una"
+      - name: Install built wheel (Alpine arch system)
+        uses: uraimo/run-on-arch-action@v2
+        if: ${{ matrix.target == 'aarch64-unknown-linux-musl' || matrix.name == 'armv7-unknown-linux-musleabihf' }}
+        with:
+          arch: ${{ matrix.arch }}
+          distro: alpine_latest
+          githubToken: ${{ github.token }}
+          install: |
+            apk add py3-pip
+            pip3 install -U pip
+          run: |
+            pip3 install una --no-index --find-links ${{ env.BINDINGS_PYTHON_PATH }}/dist --force-reinstall
+            python3 -c "import una"
+      - name: Upload wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: ${{ github.workspace }}/${{ env.BINDINGS_PYTHON_PATH }}/dist
+
+  publish-python:
+    name: Publish Python package
+    runs-on: ubuntu-latest
+    # if: "startsWith(github.ref, 'refs/tags/')"
+    needs: build-python
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: wheels
+      - name: Publish to PyPI
+        uses: messense/maturin-action@v1
+        env:
+          MATURIN_REPOSITORY_URL: https://test.pypi.org/legacy/ # Remove before merge
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        with:
+          command: upload
+          args: --skip-existing *
+
+  ################
+  ##   NodeJS   ##
+  ################
+  build-nodejs:
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.prepare-matrix.outputs.nodejs) }}
+    name: nodejs@${{ matrix.target }}
+    runs-on: ${{ matrix.host }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}
+        shell: bash
+    needs:
+      - build-proto
+      - prepare-matrix
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Download protobufs from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: protobufs
+          path: ${{ github.workspace }}/proto/out
+      - name: Setup node
+        if: ${{ !matrix.build.docker }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          check-latest: true
+          cache: yarn
+          cache-dependency-path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/yarn.lock
+      - name: Install
+        if: ${{ !matrix.build.docker }}
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+          toolchain: stable
+          target: ${{ matrix.target }}
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ${{ github.workspace }}/.cargo-cache
+            ${{ github.workspace }}/target/
+          key: ${{ matrix.target }}-cargo-${{ matrix.host }}
+      - name: Cache NPM dependencies
+        uses: actions/cache@v3
+        with:
+          path: .yarn/cache
+          key: npm-cache-build-${{ matrix.target }}-node@16
+      - name: Setup toolchain and yarn
+        if: ${{ matrix.build.setup }}
+        run: ${{ matrix.build.setup }}
+      - name: Install dependencies
+        run: yarn install
+      - name: Setup node x86
+        if: ${{ matrix.target == 'i686-pc-windows-msvc' }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          check-latest: true
+          cache: yarn
+          architecture: x86
+          cache-dependency-path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/yarn.lock
+      - name: Build
+        if: ${{ !matrix.build.docker }}
+        run: ${{ matrix.build.script }}
+      - name: Build in Docker
+        if: ${{ matrix.build.docker }}
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ matrix.build.docker }}
+          options: "--user 0:0 -v ${{ github.workspace }}/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}:/build -w /build/${{ env.BINDINGS_JS_PATH }}"
+          run: ${{ matrix.build.script }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: bindings-js-${{ matrix.target }}
+          path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/${{ env.APP_NAME }}.*.node
+          if-no-files-found: error
+
+  build-nodejs-freebsd:
+    runs-on: macos-12
+    name: nodejs@freebsd
+    needs: build-proto
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Download protobufs from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: protobufs
+          path: ${{ github.workspace }}/proto/out
+      - name: Build
+        id: build
+        uses: vmactions/freebsd-vm@v0
+        env:
+          DEBUG: napi:*
+          RUSTUP_HOME: /usr/local/rustup
+          CARGO_HOME: /usr/local/cargo
+          RUSTUP_IO_THREADS: 1
+        with:
+          envs: DEBUG RUSTUP_HOME CARGO_HOME RUSTUP_IO_THREADS
+          usesh: true
+          mem: 3000
+          prepare: |
+            pkg install -y curl node16 python2 perl5 gmake
+            curl -qL https://www.npmjs.com/install.sh | sh
+            npm install --location=global --ignore-scripts yarn
+            curl https://sh.rustup.rs -sSf --output rustup.sh
+            sh rustup.sh -y --profile minimal --default-toolchain stable
+            export PATH="/usr/local/cargo/bin:$PATH"
+            echo "~~~~ rustc --version ~~~~"
+            rustc --version
+            echo "~~~~ node -v ~~~~"
+            node -v
+            echo "~~~~ yarn --version ~~~~"
+            yarn --version
+          run: |
+            export PATH="/usr/local/cargo/bin:$PATH"
+            pwd
+            cd ${{ env.BINDINGS_JS_PATH }}
+            ls -lah
+            whoami
+            env
+            freebsd-version
+            yarn install
+            yarn build
+            strip -x *.node
+            yarn test
+            rm -rf node_modules
+            rm -rf ../../target
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: bindings-js-freebsd
+          path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/${{ env.APP_NAME }}.*.node
+          if-no-files-found: error
+
+  test-nodejs:
+    needs:
+      - prepare-matrix
+      - build-nodejs
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["14", "16", "18"]
+        settings: ${{ fromJson(needs.prepare-matrix.outputs.nodejs) }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}
+        shell: bash
+    runs-on: ${{ matrix.settings.host }}
+    name: tests-nodejs@${{ matrix.settings.target }}@node-${{ matrix.node }}
+    steps:
+      - name: Checkout project
+        if: ${{ matrix.settings.test }}
+        uses: actions/checkout@v3
+      - name: Setup node
+        if: ${{ matrix.settings.test }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node }}
+          check-latest: true
+          cache: yarn
+          cache-dependency-path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/yarn.lock
+      - name: Setup node x86
+        if: ${{ matrix.settings.test && matrix.settings.target == 'i686-pc-windows-msvc' }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node }}
+          check-latest: true
+          cache: yarn
+          architecture: x86
+          cache-dependency-path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/yarn.lock
+      - name: Cache NPM dependencies
+        if: ${{ matrix.settings.test }}
+        uses: actions/cache@v3
+        with:
+          path: .yarn/cache
+          key: npm-cache-test-${{ matrix.settings.target }}-${{ matrix.node }}-${{ hashFiles('yarn.lock') }}
+      - name: Configure Yarn
+        if: ${{ matrix.settings.test.setup }}
+        run: ${{ matrix.settings.test.setup }}
+      - name: Install dependencies
+        if: ${{ matrix.settings.test }}
+        run: yarn install
+      - name: Download artifacts
+        if: ${{ matrix.settings.test }}
+        uses: actions/download-artifact@v3
+        with:
+          name: bindings-js-${{ matrix.settings.target }}
+          path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}
+      - name: List .node files
+        if: ${{ matrix.settings.test }}
+        run: ls -R . | grep -e "${{ env.APP_NAME }}\..*node"
+      - name: Test bindings
+        if: ${{ matrix.settings.test && !matrix.settings.test.prefix-docker && !matrix.settings.test.custom-docker }}
+        run: yarn test
+      - name: Init Docker
+        if: ${{ matrix.settings.test.prefix-docker || matrix.settings.test.custom-docker }}
+        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
+      - name: Test bindings in Docker
+        if: ${{ matrix.settings.test.prefix-docker }}
+        run: docker run --rm -v $(pwd):/build -w /build ${{ matrix.settings.test.prefix-docker }}${{ matrix.node }}${{ matrix.settings.test.suffix-docker }} yarn test
+      - name: Test bindings in Docker with custom command
+        if: ${{ matrix.settings.test.custom-docker }}
+        run: ${{ matrix.settings.test.custom-docker }}
+
+  generate-types:
+    name: Generate TypeScript types
+    needs:
+      - build-nodejs
+      - build-nodejs-freebsd
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Download protobufs from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: protobufs
+          path: ${{ github.workspace }}/proto/out
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          check-latest: true
+          cache: yarn
+          cache-dependency-path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/yarn.lock
+      - name: Install
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+          toolchain: stable
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ${{ github.workspace }}/.cargo-cache
+            ${{ github.workspace }}/target/
+          key: cargo-types
+      - name: Cache NPM dependencies
+        uses: actions/cache@v3
+        with:
+          path: .yarn/cache
+          key: npm-cache-types-${{ hashFiles('yarn.lock') }}
+      - name: Install dependencies
+        run: yarn install
+      - name: Generate types
+        run: yarn generate-types
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: types
+          path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/index.d.ts
+
+  publish-npm:
+    name: Publish NPM package
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}
+    needs:
+      - build-nodejs-freebsd
+      - test-nodejs
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          check-latest: true
+          cache: yarn
+          cache-dependency-path: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}/yarn.lock
+      - name: Cache NPM dependencies
+        uses: actions/cache@v3
+        with:
+          path: .yarn/cache
+          key: npm-cache-ubuntu-latest-publish
+      - name: Install dependencies
+        run: yarn install
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: Download types artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: types
+      - name: Move artifacts
+        run: yarn artifacts
+      - name: List packages
+        run: ls -R ./npm
+        shell: bash
+      - name: Publish
+        run: |
+          if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
+          then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+            npm publish --access public
+          elif git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+";
+          then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+            npm publish --tag next --access public
+          else
+            echo "Not a release, skipping publish"
+          fi
+        env:
+          GITHUB_TOKEN: "" # ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: "" # ${{ secrets.NPM_TOKEN }}

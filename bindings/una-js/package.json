@@ -31,11 +31,12 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "napi build --platform --release && yarn generate-types",
-    "build:debug": "napi build --platform && yarn generate-types",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
     "prepublishOnly": "napi prepublish -t npm",
     "test": "ava",
     "version": "napi version",
+    "postbuild": "yarn generate-types",
     "generate-types": "cargo run --manifest-path ../../schemas/Cargo.toml schemas && node generate-types.js"
   },
   "packageManager": "yarn@3.2.2",
