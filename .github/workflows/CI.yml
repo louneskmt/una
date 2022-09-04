@@ -76,7 +76,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: ">=1.11.0"
+          go-version: ">=1.17.0"
       - name: Cache cargo
         uses: actions/cache@v3
         with:
@@ -89,7 +89,8 @@ jobs:
           key: protobufs
       - name: Install Bazel
         run: |
-          go install github.com/bazelbuild/bazelisk@latest
+          # Issue on v1.13.0, see https://github.com/bazelbuild/bazelisk/issues/352
+          go install github.com/bazelbuild/bazelisk@v1.12.2
       - name: Download Protoc
         run: |
           curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.5/protobuf-cpp-3.21.5.tar.gz
