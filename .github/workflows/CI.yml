@@ -539,6 +539,7 @@ jobs:
     needs:
       - build-nodejs-freebsd
       - test-nodejs
+      - generate-types
     steps:
       - name: Checkout project
         uses: actions/checkout@v3
@@ -565,7 +566,10 @@ jobs:
         with:
           name: types
       - name: Move artifacts
-        run: yarn artifacts
+        run: |
+          find ${{ github.workspace }}/artifacts -type d ! -name bindings\* ! -name artifacts -exec rm -r {} +
+          find ${{ github.workspace }}/artifacts -type f ! -name una\* -exec rm {} +
+          yarn artifacts --dir ../../artifacts --dist ./npm
       - name: List packages
         run: ls -R ./npm
         shell: bash

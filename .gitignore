@@ -1,5 +1,5 @@
 /target
 /Cargo.lock
-/.DS_Store
+.DS_Store
 /proto/out/*
 !/proto/out/.gitkeep
