@@ -115,6 +115,39 @@ jobs:
           if-no-files-found: error
 
   ################
+  ##    RUST    ##
+  ################
+  test-rust:
+    name: Run Rust tests for Una and Una Core
+    needs:
+      - prepare-matrix
+      - build-proto
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+      - name: Cache cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ${{ github.workspace }}/.cargo-cache
+            ${{ github.workspace }}/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Test Una CLI
+        run: cargo test --bin una-cli
+      - name: Test Una Core
+        run: cargo test --package una-core
+
+  ################
   ##   PYTHON   ##
   ################
   build-python:
@@ -241,7 +274,7 @@ jobs:
   publish-python:
     name: Publish Python package
     runs-on: ubuntu-latest
-    # if: "startsWith(github.ref, 'refs/tags/')"
+    if: "startsWith(github.ref, 'refs/tags/v')"
     needs: build-python
     steps:
       - uses: actions/download-artifact@v3
@@ -533,6 +566,7 @@ jobs:
   publish-npm:
     name: Publish NPM package
     runs-on: ubuntu-latest
+    if: "startsWith(github.ref, 'refs/tags/v')"
     defaults:
       run:
         working-directory: ${{ github.workspace }}/${{ env.BINDINGS_JS_PATH }}
@@ -570,22 +604,10 @@ jobs:
           find ${{ github.workspace }}/artifacts -type d ! -name bindings\* ! -name artifacts -exec rm -r {} +
           find ${{ github.workspace }}/artifacts -type f ! -name una\* -exec rm {} +
           yarn artifacts --dir ../../artifacts --dist ./npm
-      - name: List packages
-        run: ls -R ./npm
-        shell: bash
       - name: Publish
         run: |
-          if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
-          then
-            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-            npm publish --access public
-          elif git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+";
-          then
-            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-            npm publish --tag next --access public
-          else
-            echo "Not a release, skipping publish"
-          fi
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+          npm publish --access public
         env:
           GITHUB_TOKEN: "" # ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: "" # ${{ secrets.NPM_TOKEN }}
