@@ -45,7 +45,7 @@
     "url": "https://github.com/blc-org/una",
     "directory": "bindings/una-js"
   },
-  "description": "Manage any Lightning node with UNA, the Universal Node API",
+  "description": "Manage any Lightning node with UNA, the Universal (Lightning) Node API",
   "ava": {
     "timeout": "2m",
     "workerThreads": false

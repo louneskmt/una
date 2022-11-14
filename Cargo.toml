@@ -1,10 +1,22 @@
 [package]
 name = "una"
-version = "0.1.0"
-edition = "2021"
+description = "Lightning Network wrapper for all the existing Lightning backends"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [workspace]
 members = [".", "core","bindings/una-python","bindings/una-js","schemas","proto-builder"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Bitcoin, Lightning and Camembert Developers"]
+repository = "https://github.com/blc-org/una"
+license = "MIT"
+keywords = ["lightning", "bitcoin", "rust"]
+categories = ["cryptography::cryptocurrencies","api-bindings","command-line-utilities"]
 
 [[bin]]
 name = "una-cli"

@@ -1,7 +1,10 @@
 [package]
 name = "una-schemas"
-version = "0.1.0"
-edition = "2021"
+description = "Utility package that extracts Rust structures to JSON schemas for Una, the Universal (Lightning) Node API"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 serde = { version = "^1.0", features = ["derive"] }
